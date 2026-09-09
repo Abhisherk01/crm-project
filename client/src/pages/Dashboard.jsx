@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import { getTickets } from "../lib/api.js";
 import StatusBadge from "../components/StatusBadge.jsx";
@@ -12,23 +12,63 @@ function formatDate(dateString) {
 }
 
 export default function Dashboard() {
+  // Results + UI states
   const [tickets, setTickets] = useState([]);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(true);       // very first load only
+  const [refreshing, setRefreshing] = useState(false); // filter refetches
   const [error, setError] = useState("");
 
+  // Filter controls
+  const [searchInput, setSearchInput] = useState("");
+  const [status, setStatus] = useState("");
+
+  // Makes the very first fetch instant; every fetch after that is debounced.
+  const isFirstRender = useRef(true);
+
   useEffect(() => {
-    async function loadTickets() {
-      try {
-        const data = await getTickets();
-        setTickets(data); // ⚠️ If your API wraps the list, use: setTickets(data.tickets);
-      } catch (err) {
-        setError(err.message);
-      } finally {
+    const controller = new AbortController();
+
+    // First load: fetch immediately. Afterwards (typing / filtering):
+    // wait 400ms of quiet before fetching — that's the debounce.
+    const delay = isFirstRender.current ? 0 : 400;
+    isFirstRender.current = false;
+
+    const timer = setTimeout(() => {
+      loadTickets(controller.signal);
+    }, delay);
+
+    // Cleanup: runs before every re-run of this effect and on unmount.
+    // Cancels the pending timer AND any request still in flight, so a slow
+    // older response can never arrive late and overwrite newer results.
+    return () => {
+      clearTimeout(timer);
+      controller.abort();
+    };
+  }, [searchInput, status]);
+
+  async function loadTickets(signal) {
+    setRefreshing(true);
+    try {
+      const data = await getTickets({ status, search: searchInput.trim() }, signal);
+      setTickets(data); // ⚠️ same as Step 12: if your API wraps the list, use data.tickets
+      setError("");
+    } catch (err) {
+      if (err.name === "AbortError") return; // superseded by a newer request — ignore
+      setError(err.message);
+    } finally {
+      if (!signal.aborted) {
+        setRefreshing(false);
         setLoading(false);
       }
     }
-    loadTickets();
-  }, []);
+  }
+
+  const filtersActive = searchInput.trim() !== "" || status !== "";
+
+  function clearFilters() {
+    setSearchInput("");
+    setStatus("");
+  }
 
   return (
     <div className="min-h-screen bg-zinc-950 p-8">
@@ -49,29 +89,80 @@ export default function Dashboard() {
           </Link>
         </div>
 
-        {/* Loading state */}
+        {/* Search + status filter bar */}
+        <div className="mt-8 flex flex-col gap-3 sm:flex-row">
+          <input
+            type="search"
+            value={searchInput}
+            onChange={(event) => setSearchInput(event.target.value)}
+            placeholder="Search ID, customer, email, subject, description..."
+            className="w-full rounded-lg border border-zinc-700 bg-zinc-900 px-4 py-2 text-white placeholder-zinc-500 outline-none transition-colors focus:border-yellow-400"
+          />
+          <select
+            value={status}
+            onChange={(event) => setStatus(event.target.value)}
+            className="rounded-lg border border-zinc-700 bg-zinc-900 px-3 py-2 text-white outline-none transition-colors focus:border-yellow-400 sm:w-44"
+          >
+            <option value="">All statuses</option>
+            <option value="Open">Open</option>
+            <option value="In Progress">In Progress</option>
+            <option value="Closed">Closed</option>
+          </select>
+          {filtersActive && (
+            <button
+              onClick={clearFilters}
+              className="rounded-lg border border-zinc-700 px-4 py-2 text-sm font-medium text-zinc-300 transition-colors hover:bg-zinc-800"
+            >
+              Clear
+            </button>
+          )}
+        </div>
+
+        {/* Loading state (first load only) */}
         {loading && <p className="mt-10 text-zinc-400">Loading tickets...</p>}
 
         {/* Error state */}
         {error && (
-          <div className="mt-10 rounded-lg border border-red-500/50 bg-zinc-900 p-4 text-red-400">
+          <div className="mt-8 rounded-lg border border-red-500/50 bg-zinc-900 p-4 text-red-400">
             Could not load tickets: {error}
           </div>
         )}
 
-        {/* Empty state */}
+        {/* Empty states — two different messages */}
         {!loading && !error && tickets.length === 0 && (
-          <div className="mt-10 rounded-lg border border-zinc-800 bg-zinc-900 p-10 text-center">
-            <p className="text-zinc-300">No tickets yet.</p>
-            <p className="mt-1 text-sm text-zinc-500">
-              Create your first ticket with the button above.
-            </p>
+          <div className="mt-8 rounded-lg border border-zinc-800 bg-zinc-900 p-10 text-center">
+            {filtersActive ? (
+              <>
+                <p className="text-zinc-300">No tickets match your search.</p>
+                <button
+                  onClick={clearFilters}
+                  className="mt-4 rounded-lg bg-yellow-400 px-4 py-2 font-semibold text-black transition-colors hover:bg-yellow-300"
+                >
+                  Clear filters
+                </button>
+              </>
+            ) : (
+              <>
+                <p className="text-zinc-300">No tickets yet.</p>
+                <p className="mt-1 text-sm text-zinc-500">
+                  Create your first ticket with the button above.
+                </p>
+              </>
+            )}
           </div>
         )}
 
-        {/* Ticket table */}
+        {/* Result count + subtle refresh indicator */}
         {!loading && !error && tickets.length > 0 && (
-          <div className="mt-8 overflow-x-auto rounded-lg border border-zinc-800 bg-zinc-900">
+          <p className="mt-4 text-sm text-zinc-500">
+            Showing {tickets.length} ticket{tickets.length !== 1 ? "s" : ""}
+            {refreshing && <span className="ml-2 text-yellow-400">· updating…</span>}
+          </p>
+        )}
+
+        {/* Ticket table (same as Step 12) */}
+        {!loading && !error && tickets.length > 0 && (
+          <div className="mt-3 overflow-x-auto rounded-lg border border-zinc-800 bg-zinc-900">
             <table className="w-full text-left text-sm">
               <thead className="border-b border-zinc-800 text-xs uppercase tracking-wider text-zinc-400">
                 <tr>

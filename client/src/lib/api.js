@@ -21,12 +21,12 @@ async function request(path, options = {}) {
   return data;
 }
 
-export function getTickets({ status = "", search = "" } = {}) {
+export function getTickets({ status = "", search = "" } = {}, signal) {
   const params = new URLSearchParams();
   if (status) params.set("status", status);
   if (search) params.set("search", search);
   const query = params.toString();
-  return request(`/tickets${query ? `?${query}` : ""}`);
+  return request(`/tickets${query ? `?${query}` : ""}`, { signal });
 }
 
 export function getTicket(ticketId) {
