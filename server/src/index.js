@@ -1,6 +1,7 @@
 import express from "express";
 import cors from "cors";
 import dotenv from "dotenv";
+import prisma from "./db.js";
 
 // Load environment variables from the .env file
 dotenv.config();
@@ -16,12 +17,24 @@ app.use(express.json());
 
 // ---------- Routes ----------
 
-// Health check — a simple route to confirm the server is alive
-app.get("/api/health", (req, res) => {
-  res.json({
-    status: "ok",
-    message: "Support CRM API is running",
-  });
+// Health check — now also verifies the database connection
+app.get("/api/health", async (req, res) => {
+  try {
+    // Run a tiny test query — if this works, the DB is reachable
+    await prisma.$queryRaw`SELECT 1`;
+
+    res.json({
+      status: "ok",
+      database: "connected",
+      message: "Support CRM API is running",
+    });
+  } catch (error) {
+    res.status(500).json({
+      status: "error",
+      database: "disconnected",
+      message: error.message,
+    });
+  }
 });
 
 // 404 handler — catches any route we haven't defined
