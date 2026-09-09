@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import { getTickets } from "../lib/api.js";
 import StatusBadge from "../components/StatusBadge.jsx";
+import StatsBar from "../components/StatsBar.jsx"; // ← CHANGE 1: new import
 
 function formatDate(dateString) {
   return new Date(dateString).toLocaleDateString(undefined, {
@@ -84,6 +85,9 @@ export default function Dashboard() {
           + New Ticket
         </Link>
       </div>
+
+      {/* Statistics strip (global counts — unaffected by filters) */}
+      <StatsBar /> {/* ← CHANGE 2: render the stats */}
 
       {/* Search + status filter bar */}
       <div className="mt-8 flex flex-col gap-3 sm:flex-row">
