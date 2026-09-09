@@ -2,6 +2,7 @@ import express from "express";
 import cors from "cors";
 import dotenv from "dotenv";
 import prisma from "./db.js";
+import router from "./routes/tickets.js";
 
 // Load environment variables from the .env file
 dotenv.config();
@@ -17,10 +18,9 @@ app.use(express.json());
 
 // ---------- Routes ----------
 
-// Health check — now also verifies the database connection
+// Health check — verifies server + database connection
 app.get("/api/health", async (req, res) => {
   try {
-    // Run a tiny test query — if this works, the DB is reachable
     await prisma.$queryRaw`SELECT 1`;
 
     res.json({
@@ -37,7 +37,10 @@ app.get("/api/health", async (req, res) => {
   }
 });
 
-// 404 handler — catches any route we haven't defined
+// All ticket routes live in routes/tickets.js
+app.use("/api/tickets", router);
+
+// 404 handler — must stay AFTER all other routes
 app.use((req, res) => {
   res.status(404).json({ error: "Route not found" });
 });
