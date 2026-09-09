@@ -90,7 +90,7 @@ router.get("/", async (req, res) => {
       where.status = status;
     }
 
-    const tickets = await prisma.ticket.findMany({
+    let tickets = await prisma.ticket.findMany({
       where,
       orderBy: { created_at: "desc" }, // newest first
     });
@@ -160,6 +160,72 @@ router.get("/:ticket_id", async (req, res) => {
   } catch (error) {
     console.error("Error fetching ticket:", error);
     res.status(500).json({ error: "Something went wrong while fetching the ticket" });
+  }
+});
+
+// PUT /api/tickets/:ticket_id — update status and/or add a note
+router.put("/:ticket_id", async (req, res) => {
+  try {
+    const { ticket_id } = req.params;
+    const { status, note } = req.body;
+
+    // Must change SOMETHING — otherwise there's nothing to do
+    if (!status && !note) {
+      return res.status(400).json({
+        error: "Provide a status and/or a note to update",
+      });
+    }
+
+    // Look the ticket up first — this handles the 404 case cleanly
+    const ticket = await prisma.ticket.findUnique({
+      where: { ticket_id },
+    });
+
+    if (!ticket) {
+      return res.status(404).json({ error: `Ticket "${ticket_id}" not found` });
+    }
+
+    // Track the timestamp for the response
+    let updated_at = ticket.updated_at;
+
+    // ---- Part 1: update the status (if provided) ----
+    if (status) {
+      if (!ALLOWED_STATUSES.includes(status)) {
+        return res.status(400).json({
+          error: `Invalid status. Allowed values: ${ALLOWED_STATUSES.join(", ")}`,
+        });
+      }
+
+      const updatedTicket = await prisma.ticket.update({
+        where: { ticket_id },
+        data: { status },
+        // updated_at refreshes automatically thanks to @updatedAt in the schema
+      });
+
+      updated_at = updatedTicket.updated_at;
+    }
+
+    // ---- Part 2: add a note (if provided) ----
+    if (note) {
+      if (typeof note !== "string" || !note.trim()) {
+        return res.status(400).json({
+          error: "note must be a non-empty string",
+        });
+      }
+
+      await prisma.note.create({
+        data: {
+          ticket_id,          // links the note to this ticket (the FK from Step 6)
+          note_text: note.trim(),
+        },
+      });
+    }
+
+    // Spec response: { success: true, updated_at }
+    res.json({ success: true, updated_at });
+  } catch (error) {
+    console.error("Error updating ticket:", error);
+    res.status(500).json({ error: "Something went wrong while updating the ticket" });
   }
 });
 
