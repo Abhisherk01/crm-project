@@ -6,10 +6,21 @@ const API_URL = import.meta.env.VITE_API_URL || "http://localhost:5000";
 // Small helper: adds the base URL + JSON headers, and converts API errors
 // into normal JavaScript Errors that pages can catch and display.
 async function request(path, options = {}) {
-  const response = await fetch(`${API_URL}/api${path}`, {
-    headers: { "Content-Type": "application/json" },
-    ...options,
-  });
+  let response;
+  try {
+    response = await fetch(`${API_URL}/api${path}`, {
+      headers: { "Content-Type": "application/json" },
+      ...options,
+    });
+  } catch (err) {
+    // fetch throws here for network-level problems only: server off,
+    // wrong port, DNS failure, machine offline. Reword it into something
+    // humans can act on. IMPORTANT: aborted requests (our Dashboard
+    // AbortController) also land in this catch — pass those through
+    // untouched so callers can recognise and ignore them.
+    if (err.name === "AbortError") throw err;
+    throw new Error("Cannot reach the server. Check that the API is running.");
+  }
 
   const data = await response.json().catch(() => null);
 

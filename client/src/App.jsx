@@ -4,6 +4,7 @@ import ScrollToTop from "./components/ScrollToTop.jsx";
 import Dashboard from "./pages/Dashboard.jsx";
 import NewTicket from "./pages/NewTicket.jsx";
 import TicketDetail from "./pages/TicketDetail.jsx";
+import NotFound from "./pages/NotFound.jsx";
 
 // Shared chrome (navbar + footer) wrapped around every page.
 // <Outlet /> marks the spot where the matched child route renders.
@@ -30,6 +31,8 @@ export default function App() {
           <Route path="/" element={<Dashboard />} />
           <Route path="/new" element={<NewTicket />} />
           <Route path="/tickets/:ticketId" element={<TicketDetail />} />
+          {/* path="*" matches anything the routes above didn't */}
+          <Route path="*" element={<NotFound />} />
         </Route>
       </Routes>
     </BrowserRouter>
